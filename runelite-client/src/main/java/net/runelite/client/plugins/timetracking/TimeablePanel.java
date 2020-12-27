@@ -33,6 +33,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import lombok.Getter;
+import net.runelite.api.Constants;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.components.ThinProgressBar;
@@ -43,8 +44,10 @@ public class TimeablePanel<T> extends JPanel
 {
 	private final T timeable;
 	private final JLabel icon = new JLabel();
+	private final JLabel farmingContractIcon = new JLabel();
 	private final JLabel estimate = new JLabel();
 	private final ThinProgressBar progress = new ThinProgressBar();
+	private final JLabel text;
 
 	public TimeablePanel(T timeable, String title, int maximumProgressValue)
 	{
@@ -58,24 +61,26 @@ public class TimeablePanel<T> extends JPanel
 		topContainer.setLayout(new BorderLayout());
 		topContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-		icon.setMinimumSize(new Dimension(36, 32));
+		icon.setMinimumSize(new Dimension(Constants.ITEM_SPRITE_WIDTH, Constants.ITEM_SPRITE_HEIGHT));
+		farmingContractIcon.setMinimumSize(new Dimension(Constants.ITEM_SPRITE_WIDTH, Constants.ITEM_SPRITE_HEIGHT));
 
 		JPanel infoPanel = new JPanel();
 		infoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		infoPanel.setLayout(new GridLayout(2, 1));
 		infoPanel.setBorder(new EmptyBorder(4, 4, 4, 0));
 
-		final JLabel location = new JShadowedLabel(title);
-		location.setFont(FontManager.getRunescapeSmallFont());
-		location.setForeground(Color.WHITE);
+		text = new JShadowedLabel(title);
+		text.setFont(FontManager.getRunescapeSmallFont());
+		text.setForeground(Color.WHITE);
 
 		estimate.setFont(FontManager.getRunescapeSmallFont());
 		estimate.setForeground(Color.GRAY);
 
-		infoPanel.add(location);
+		infoPanel.add(text);
 		infoPanel.add(estimate);
 
 		topContainer.add(icon, BorderLayout.WEST);
+		topContainer.add(farmingContractIcon, BorderLayout.EAST);
 		topContainer.add(infoPanel, BorderLayout.CENTER);
 
 		progress.setValue(0);

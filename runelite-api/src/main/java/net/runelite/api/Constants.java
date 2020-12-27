@@ -83,10 +83,40 @@ public class Constants
 	public static final int TILE_FLAG_BRIDGE = 2;
 
 	/**
+	 * The height of the overworld, in tiles. Coordinates above this are in caves and other such zones.
+	 */
+	public static final int OVERWORLD_MAX_Y = 4160;
+
+	/**
 	 * The number of milliseconds in a client tick.
 	 * <p>
 	 * This is the length of a single frame when the client is running at
 	 * the maximum framerate of 50 fps.
 	 */
 	public static final int CLIENT_TICK_LENGTH = 20;
+
+	/**
+	 * The number of milliseconds in a server game tick.
+	 * <p>
+	 * This is the length of a single game cycle under ideal conditions.
+	 * All game-play actions operate within multiples of this duration.
+	 */
+	public static final int GAME_TICK_LENGTH = 600;
+
+	/**
+	 * Width of a standard item sprite
+	 */
+	public static final int ITEM_SPRITE_WIDTH = 36;
+
+	/**
+	 * Height of a standard item sprite
+	 */
+	public static final int ITEM_SPRITE_HEIGHT = 32;
+
+	/**
+	 * High alchemy = shop price * HIGH_ALCHEMY_MULTIPLIER
+	 *
+	 * @see ItemComposition#getPrice
+	 */
+	public static final float HIGH_ALCHEMY_MULTIPLIER = .6f;
 }

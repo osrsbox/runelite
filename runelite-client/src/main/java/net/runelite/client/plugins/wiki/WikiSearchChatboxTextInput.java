@@ -48,11 +48,12 @@ import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.game.chatbox.ChatboxTextInput;
+import net.runelite.client.ui.JagexColors;
 import net.runelite.client.util.LinkBrowser;
-import net.runelite.http.api.RuneLiteAPI;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
@@ -76,7 +77,8 @@ public class WikiSearchChatboxTextInput extends ChatboxTextInput
 
 	@Inject
 	public WikiSearchChatboxTextInput(ChatboxPanelManager chatboxPanelManager, ClientThread clientThread,
-		ScheduledExecutorService scheduledExecutorService, @Named("developerMode") final boolean developerMode)
+		ScheduledExecutorService scheduledExecutorService, @Named("developerMode") final boolean developerMode,
+		OkHttpClient okHttpClient)
 	{
 		super(chatboxPanelManager, clientThread);
 		this.chatboxPanelManager = chatboxPanelManager;
@@ -122,7 +124,7 @@ public class WikiSearchChatboxTextInput extends ChatboxTextInput
 					.url(url)
 					.build();
 
-				RuneLiteAPI.CLIENT.newCall(req).enqueue(new Callback()
+				okHttpClient.newCall(req).enqueue(new Callback()
 				{
 					@Override
 					public void onFailure(Call call, IOException e)
@@ -134,7 +136,7 @@ public class WikiSearchChatboxTextInput extends ChatboxTextInput
 					public void onResponse(Call call, Response response) throws IOException
 					{
 						String body = response.body().string();
-						try
+						try // NOPMD: UseTryWithResources
 						{
 							JsonArray jar = new JsonParser().parse(body).getAsJsonArray();
 							List<String> apredictions = gson.fromJson(jar.get(1), new TypeToken<List<String>>()
@@ -218,7 +220,7 @@ public class WikiSearchChatboxTextInput extends ChatboxTextInput
 			bg.setOriginalWidth(16);
 			bg.setWidthMode(WidgetSizeMode.MINUS);
 			bg.revalidate();
-			bg.setName("<col=ff9040>" + pred);
+			bg.setName(JagexColors.MENU_TARGET_TAG + pred);
 			bg.setAction(0, "Open");
 			bg.setHasListener(true);
 			bg.setOnOpListener((JavaScriptCallback) ev -> search(pred));
@@ -253,6 +255,11 @@ public class WikiSearchChatboxTextInput extends ChatboxTextInput
 	@Override
 	public void keyPressed(KeyEvent ev)
 	{
+		if (!chatboxPanelManager.shouldTakeInput())
+		{
+			return;
+		}
+
 		switch (ev.getKeyCode())
 		{
 			case KeyEvent.VK_UP:

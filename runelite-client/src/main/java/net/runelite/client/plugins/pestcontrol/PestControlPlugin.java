@@ -34,7 +34,6 @@ import javax.inject.Inject;
 import lombok.AccessLevel;
 import lombok.Getter;
 import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.NPC;
 import net.runelite.api.NpcID;
@@ -71,9 +70,6 @@ public class PestControlPlugin extends Plugin
 	private OverlayManager overlayManager;
 
 	@Inject
-	private Client client;
-
-	@Inject
 	private PestControlOverlay overlay;
 
 	@Override
@@ -102,7 +98,7 @@ public class PestControlPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage)
 	{
-		if (overlay.getGame() != null && chatMessage.getType() == ChatMessageType.SERVER)
+		if (overlay.getGame() != null && chatMessage.getType() == ChatMessageType.GAMEMESSAGE)
 		{
 			Matcher matcher = SHIELD_DROP.matcher(chatMessage.getMessage());
 			if (matcher.lookingAt())

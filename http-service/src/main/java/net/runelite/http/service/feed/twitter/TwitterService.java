@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -103,9 +104,9 @@ public class TwitterService
 						{
 							return getTweets(true);
 						}
-						throw new InternalServerErrorException("Could not auth to Twitter after trying once: " + response.message());
+						throw new InternalServerErrorException("Could not auth to Twitter after trying once: " + response);
 					default:
-						throw new IOException("Error getting Twitter list: " + response.message());
+						throw new IOException("Error getting Twitter list: " + response);
 				}
 			}
 
@@ -114,7 +115,7 @@ public class TwitterService
 			{
 			}.getType();
 			List<TwitterStatusesResponseItem> statusesResponse = RuneLiteAPI.GSON
-				.fromJson(new InputStreamReader(in), listType);
+				.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), listType);
 
 			List<FeedItem> items = new ArrayList<>();
 
@@ -134,7 +135,7 @@ public class TwitterService
 
 	private void updateToken() throws IOException
 	{
-		String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
+		String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
 		Request request = new Request.Builder()
 			.url(AUTH_URL)
@@ -146,12 +147,12 @@ public class TwitterService
 		{
 			if (!response.isSuccessful())
 			{
-				throw new IOException("Error authing to Twitter: " + response.message());
+				throw new IOException("Error authing to Twitter: " + response);
 			}
 
 			InputStream in = response.body().byteStream();
 			TwitterOAuth2TokenResponse tokenResponse = RuneLiteAPI.GSON
-				.fromJson(new InputStreamReader(in), TwitterOAuth2TokenResponse.class);
+				.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), TwitterOAuth2TokenResponse.class);
 
 			if (!tokenResponse.getTokenType().equals("bearer"))
 			{

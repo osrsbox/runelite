@@ -155,8 +155,15 @@ public class WidgetInfoTableModel extends AbstractTableModel
 		out.add(new WidgetField<>("ItemId", Widget::getItemId, Widget::setItemId, Integer.class));
 		out.add(new WidgetField<>("ItemQuantity", Widget::getItemQuantity, Widget::setItemQuantity, Integer.class));
 		out.add(new WidgetField<>("ItemQuantityMode", Widget::getItemQuantityMode, Widget::setItemQuantityMode, Integer.class));
-		out.add(new WidgetField<>("ModelId", Widget::getModelId));
+		out.add(new WidgetField<>("ModelId", Widget::getModelId, Widget::setModelId, Integer.class));
+		out.add(new WidgetField<>("ModelType", Widget::getModelType, Widget::setModelType, Integer.class));
+		out.add(new WidgetField<>("AnimationId", Widget::getAnimationId, Widget::setAnimationId, Integer.class));
+		out.add(new WidgetField<>("RotationX", Widget::getRotationX, Widget::setRotationX, Integer.class));
+		out.add(new WidgetField<>("RotationY", Widget::getRotationY, Widget::setRotationY, Integer.class));
+		out.add(new WidgetField<>("RotationZ", Widget::getRotationZ, Widget::setRotationZ, Integer.class));
+		out.add(new WidgetField<>("ModelZoom", Widget::getModelZoom, Widget::setModelZoom, Integer.class));
 		out.add(new WidgetField<>("SpriteId", Widget::getSpriteId, Widget::setSpriteId, Integer.class));
+		out.add(new WidgetField<>("SpriteTiling", Widget::getSpriteTiling, Widget::setSpriteTiling, Boolean.class));
 		out.add(new WidgetField<>("BorderType", Widget::getBorderType, Widget::setBorderType, Integer.class));
 		out.add(new WidgetField<>("IsIf3", Widget::isIf3));
 		out.add(new WidgetField<>("HasListener", Widget::hasListener, Widget::setHasListener, Boolean.class));
@@ -186,6 +193,7 @@ public class WidgetInfoTableModel extends AbstractTableModel
 		out.add(new WidgetField<>("NoClickThrough", Widget::getNoClickThrough, Widget::setNoClickThrough, Boolean.class));
 		out.add(new WidgetField<>("NoScrollThrough", Widget::getNoScrollThrough, Widget::setNoScrollThrough, Boolean.class));
 		out.add(new WidgetField<>("TargetVerb", Widget::getTargetVerb, Widget::setTargetVerb, String.class));
+		out.add(new WidgetField<>("DragParent", Widget::getDragParent));
 
 		return out;
 	}

@@ -24,12 +24,14 @@
  */
 package net.runelite.client.plugins.skybox;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -87,7 +89,7 @@ class Skybox
 
 	public Skybox(InputStream is, String filename) throws IOException
 	{
-		this(new InputStreamReader(is), filename);
+		this(new InputStreamReader(is, StandardCharsets.UTF_8), filename);
 	}
 
 	public Skybox(Reader reader, String filename) throws IOException
@@ -108,7 +110,7 @@ class Skybox
 			{
 				m.reset(line);
 				int end = 0;
-				for (; end < line.length(); )
+				while (end < line.length())
 				{
 					m.region(end, line.length());
 					if (!m.find())
@@ -376,9 +378,6 @@ class Skybox
 		x /= 8.d;
 		y /= 8.d;
 
-		int cx = (int) x;
-		int cy = (int) y;
-
 		int centerChunkData = chunkData(px / 8, py / 8, plane, chunkMapper);
 		if (centerChunkData == -1)
 		{
@@ -447,7 +446,7 @@ class Skybox
 		}
 
 		// Convert back to int range values, and bounds check while we are at it
-		byte ay = (byte) Math.min(Math.max(Math.round(Math.pow(ty / t, brightness) * 255.d), 0), 255);
+		byte ay = (byte) Math.min(Math.max(Math.round(ty / t * 255.d), 0), 255);
 		byte aco = (byte) Math.min(Math.max(Math.round(tco * 128.d / t), -128), 127);
 		byte acg = (byte) Math.min(Math.max(Math.round(tcg * 128.d / t), -128), 127);
 
@@ -457,7 +456,11 @@ class Skybox
 		int r = (tmp - (aco >> 1)) & 0xFF;
 		int b = (r + aco) & 0xFF;
 
-		return r << 16 | g << 8 | b;
+		// increase brightness with HSB
+		float[] hsb = Color.RGBtoHSB(r, g, b, null);
+		hsb[2] = (float) Math.pow(hsb[2], brightness);
+
+		return 0xFFFFFF & Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
 	}
 
 	/**

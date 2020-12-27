@@ -16,6 +16,7 @@ spring.jmx.enabled: false
 oauth:
   client-id:
   client-secret:
+  callback: https://api.runelite.net/oauth/
 
 # Minio client storage for cache
 minio:
@@ -24,14 +25,22 @@ minio:
   secretkey: /PZCxzmsJzwCHYlogcymuprniGCaaLUOET2n6yMP
   bucket: runelite
 
-# Redis client for temporary data storage
+# Redis client
 redis:
   pool.size: 10
-  host: http://localhost:6379
+  host: tcp://localhost:6379
 
-# Twitter client for feed
+mongo:
+  jndiName: java:comp/env/mongodb/runelite
+  database: runelite
+
 runelite:
+  # Twitter client for feed
   twitter:
     consumerkey:
     secretkey:
-    listid: 968949795153948673
+    listid: 1185897074786742273
+  ge:
+    history: 90 # days
+  loottracker:
+    history: 90 # days

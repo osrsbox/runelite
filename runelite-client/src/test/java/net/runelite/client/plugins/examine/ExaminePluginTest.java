@@ -27,29 +27,32 @@ package net.runelite.client.plugins.examine;
 import com.google.inject.Guice;
 import com.google.inject.testing.fieldbinder.Bind;
 import com.google.inject.testing.fieldbinder.BoundFieldModule;
-import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemID;
 import net.runelite.api.MenuAction;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.game.ItemManager;
 import net.runelite.http.api.examine.ExamineClient;
+import static org.junit.Assert.assertEquals;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
+import org.mockito.ArgumentCaptor;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.Mock;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ExaminePluginTest
@@ -73,10 +76,6 @@ public class ExaminePluginTest
 	@Bind
 	ItemManager itemManager;
 
-	@Mock
-	@Bind
-	ScheduledExecutorService scheduledExecutorService;
-
 	@Before
 	public void before()
 	{
@@ -87,6 +86,7 @@ public class ExaminePluginTest
 	public void testItem()
 	{
 		when(client.getWidget(anyInt(), anyInt())).thenReturn(mock(Widget.class));
+		when(itemManager.getItemComposition(anyInt())).thenReturn(mock(ItemComposition.class));
 
 		MenuOptionClicked menuOptionClicked = new MenuOptionClicked();
 		menuOptionClicked.setMenuOption("Examine");
@@ -94,7 +94,7 @@ public class ExaminePluginTest
 		menuOptionClicked.setId(ItemID.ABYSSAL_WHIP);
 		examinePlugin.onMenuOptionClicked(menuOptionClicked);
 
-		ChatMessage chatMessage = new ChatMessage(null, ChatMessageType.EXAMINE_ITEM, "", "A weapon from the abyss.", "", 0);
+		ChatMessage chatMessage = new ChatMessage(null, ChatMessageType.ITEM_EXAMINE, "", "A weapon from the abyss.", "", 0);
 		examinePlugin.onChatMessage(chatMessage);
 
 		// This passes due to not mocking the ItemComposition for the whip
@@ -105,6 +105,7 @@ public class ExaminePluginTest
 	public void testLargeStacks()
 	{
 		when(client.getWidget(anyInt(), anyInt())).thenReturn(mock(Widget.class));
+		when(itemManager.getItemComposition(anyInt())).thenReturn(mock(ItemComposition.class));
 
 		MenuOptionClicked menuOptionClicked = new MenuOptionClicked();
 		menuOptionClicked.setMenuOption("Examine");
@@ -112,9 +113,28 @@ public class ExaminePluginTest
 		menuOptionClicked.setId(ItemID.ABYSSAL_WHIP);
 		examinePlugin.onMenuOptionClicked(menuOptionClicked);
 
-		ChatMessage chatMessage = new ChatMessage(null, ChatMessageType.EXAMINE_ITEM, "", "100000 x Abyssal whip", "", 0);
+		ChatMessage chatMessage = new ChatMessage(null, ChatMessageType.ITEM_EXAMINE, "", "100000 x Abyssal whip", "", 0);
 		examinePlugin.onChatMessage(chatMessage);
 
 		verify(examineClient, never()).submitItem(anyInt(), anyString());
+	}
+
+	@Test
+	public void testGetItemPrice()
+	{
+		ItemComposition itemComposition = mock(ItemComposition.class);
+		when(itemComposition.getName()).thenReturn("Abyssal whip");
+		when(itemComposition.getHaPrice()).thenReturn(2);
+		when(itemManager.getItemPrice(ItemID.ABYSSAL_WHIP)).thenReturn(3);
+		examinePlugin.getItemPrice(ItemID.ABYSSAL_WHIP, itemComposition, 2_000_000_000);
+
+		ArgumentCaptor<QueuedMessage> argumentCaptor = ArgumentCaptor.forClass(QueuedMessage.class);
+		verify(chatMessageManager).queue(argumentCaptor.capture());
+
+		QueuedMessage queuedMessage = argumentCaptor.getValue();
+		assertEquals(
+			"<colNORMAL>Price of <colHIGHLIGHT>2,000,000,000 x Abyssal whip<colNORMAL>:<colNORMAL> GE average <colHIGHLIGHT>6,000,000,000<colNORMAL> (<colHIGHLIGHT>3<colNORMAL>ea)<colNORMAL> HA value <colHIGHLIGHT>4,000,000,000<colNORMAL> (<colHIGHLIGHT>2<colNORMAL>ea)",
+			queuedMessage.getRuneLiteFormattedMessage()
+		);
 	}
 }

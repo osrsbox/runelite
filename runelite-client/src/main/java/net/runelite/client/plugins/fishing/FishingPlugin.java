@@ -46,6 +46,7 @@ import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.ItemID;
+import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
 import net.runelite.api.Varbits;
 import net.runelite.api.coords.LocalPoint;
@@ -57,14 +58,21 @@ import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetID;
+import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.Notifier;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.OverlayMenuClicked;
+import net.runelite.client.game.FishingSpot;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.xptracker.XpTrackerPlugin;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.OverlayMenuEntry;
 
 @PluginDescriptor(
 	name = "Fishing",
@@ -78,8 +86,10 @@ public class FishingPlugin extends Plugin
 {
 	private static final int TRAWLER_SHIP_REGION_NORMAL = 7499;
 	private static final int TRAWLER_SHIP_REGION_SINKING = 8011;
-
+	private static final int TRAWLER_TIME_LIMIT_IN_SECONDS = 614;
 	private static final int TRAWLER_ACTIVITY_THRESHOLD = Math.round(0.15f * 255);
+
+	private Instant trawlerStartTime;
 
 	@Getter(AccessLevel.PACKAGE)
 	private final FishingSession session = new FishingSession();
@@ -142,6 +152,7 @@ public class FishingPlugin extends Plugin
 		minnowSpots.clear();
 		trawlerNotificationSent = false;
 		currentSpot = null;
+		trawlerStartTime = null;
 	}
 
 	@Subscribe
@@ -152,6 +163,18 @@ public class FishingPlugin extends Plugin
 		{
 			fishingSpots.clear();
 			minnowSpots.clear();
+		}
+	}
+
+	@Subscribe
+	public void onOverlayMenuClicked(OverlayMenuClicked overlayMenuClicked)
+	{
+		OverlayMenuEntry overlayMenuEntry = overlayMenuClicked.getEntry();
+		if (overlayMenuEntry.getMenuAction() == MenuAction.RUNELITE_OVERLAY
+			&& overlayMenuClicked.getEntry().getOption().equals(FishingOverlay.FISHING_RESET)
+			&& overlayMenuClicked.getOverlay() == overlay)
+		{
+			session.setLastFishCaught(null);
 		}
 	}
 
@@ -180,7 +203,7 @@ public class FishingPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		if (event.getType() != ChatMessageType.FILTERED)
+		if (event.getType() != ChatMessageType.SPAM)
 		{
 			return;
 		}
@@ -210,7 +233,7 @@ public class FishingPlugin extends Plugin
 		}
 
 		final NPC npc = (NPC) target;
-		FishingSpot spot = FishingSpot.getSPOTS().get(npc.getId());
+		FishingSpot spot = FishingSpot.findSpot(npc.getId());
 
 		if (spot == null)
 		{
@@ -229,10 +252,6 @@ public class FishingPlugin extends Plugin
 
 		for (Item item : itemContainer.getItems())
 		{
-			if (item == null)
-			{
-				continue;
-			}
 			switch (item.getId())
 			{
 				case ItemID.DRAGON_HARPOON:
@@ -255,6 +274,11 @@ public class FishingPlugin extends Plugin
 				case ItemID.KARAMBWAN_VESSEL_3159:
 				case ItemID.CORMORANTS_GLOVE:
 				case ItemID.CORMORANTS_GLOVE_22817:
+				case ItemID.TRAILBLAZER_HARPOON:
+				case ItemID.TRAILBLAZER_HARPOON_25114:
+				case ItemID.CRYSTAL_HARPOON:
+				case ItemID.CRYSTAL_HARPOON_23864:
+				case ItemID.CRYSTAL_HARPOON_INACTIVE:
 					return true;
 			}
 		}
@@ -282,7 +306,7 @@ public class FishingPlugin extends Plugin
 
 		for (NPC npc : fishingSpots)
 		{
-			if (FishingSpot.getSPOTS().get(npc.getId()) == FishingSpot.MINNOW && config.showMinnowOverlay())
+			if (FishingSpot.findSpot(npc.getId()) == FishingSpot.MINNOW && config.showMinnowOverlay())
 			{
 				final int id = npc.getIndex();
 				final MinnowSpot minnowSpot = minnowSpots.get(id);
@@ -296,6 +320,11 @@ public class FishingPlugin extends Plugin
 				}
 			}
 		}
+
+		if (config.trawlerTimer())
+		{
+			updateTrawlerTimer();
+		}
 	}
 
 	@Subscribe
@@ -303,7 +332,7 @@ public class FishingPlugin extends Plugin
 	{
 		final NPC npc = event.getNpc();
 
-		if (!FishingSpot.getSPOTS().containsKey(npc.getId()))
+		if (FishingSpot.findSpot(npc.getId()) == null)
 		{
 			return;
 		}
@@ -351,9 +380,89 @@ public class FishingPlugin extends Plugin
 		}
 	}
 
+	@Subscribe
+	public void onWidgetLoaded(WidgetLoaded event)
+	{
+		if (event.getGroupId() == WidgetID.FISHING_TRAWLER_GROUP_ID)
+		{
+			trawlerStartTime = Instant.now();
+		}
+	}
+
+	/**
+	 * Changes the Fishing Trawler timer widget from minutes to minutes and seconds
+	 */
+	private void updateTrawlerTimer()
+	{
+		if (trawlerStartTime == null)
+		{
+			return;
+		}
+
+		int regionID = client.getLocalPlayer().getWorldLocation().getRegionID();
+		if (regionID != TRAWLER_SHIP_REGION_NORMAL && regionID != TRAWLER_SHIP_REGION_SINKING)
+		{
+			log.debug("Trawler session ended");
+			trawlerStartTime = null;
+			return;
+		}
+
+		Widget trawlerTimerWidget = client.getWidget(WidgetInfo.FISHING_TRAWLER_TIMER);
+		if (trawlerTimerWidget == null)
+		{
+			return;
+		}
+
+		long timeLeft = TRAWLER_TIME_LIMIT_IN_SECONDS - Duration.between(trawlerStartTime, Instant.now()).getSeconds();
+		if (timeLeft < 0)
+		{
+			timeLeft = 0;
+		}
+
+		int minutes = (int) timeLeft / 60;
+		int seconds = (int) timeLeft % 60;
+
+		final StringBuilder trawlerText = new StringBuilder();
+		trawlerText.append("Time Left: ");
+
+		if (minutes > 0)
+		{
+			trawlerText.append(minutes);
+		}
+		else
+		{
+			trawlerText.append("00");
+		}
+
+		trawlerText.append(':');
+
+		if (seconds < 10)
+		{
+			trawlerText.append("0");
+		}
+
+		trawlerText.append(seconds);
+
+		trawlerTimerWidget.setText(trawlerText.toString());
+	}
+
 	private void inverseSortSpotDistanceFromPlayer()
 	{
+		if (fishingSpots.isEmpty())
+		{
+			return;
+		}
+
 		final LocalPoint cameraPoint = new LocalPoint(client.getCameraX(), client.getCameraY());
-		fishingSpots.sort(Comparator.comparing(npc -> -1 * npc.getLocalLocation().distanceTo(cameraPoint)));
+		fishingSpots.sort(
+			Comparator.comparing(
+				// Negate to have the furthest first
+				(NPC npc) -> -npc.getLocalLocation().distanceTo(cameraPoint))
+				// Order by position
+				.thenComparing(NPC::getLocalLocation, Comparator.comparing(LocalPoint::getX)
+					.thenComparing(LocalPoint::getY))
+				// And then by id
+				.thenComparing(NPC::getId)
+		);
 	}
 }

@@ -31,18 +31,11 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.List;
-import javax.annotation.Nullable;
 import lombok.Getter;
 import lombok.Setter;
 
 public class PanelComponent implements LayoutableRenderableEntity
 {
-	public enum Orientation
-	{
-		HORIZONTAL,
-		VERTICAL;
-	}
-
 	@Getter
 	private final Rectangle bounds = new Rectangle();
 
@@ -50,20 +43,21 @@ public class PanelComponent implements LayoutableRenderableEntity
 	private Point preferredLocation = new Point();
 
 	@Setter
+	@Getter
 	private Dimension preferredSize = new Dimension(ComponentConstants.STANDARD_WIDTH, 0);
 
 	@Setter
-	@Nullable
+	@Getter
 	private Color backgroundColor = ComponentConstants.STANDARD_BACKGROUND_COLOR;
 
 	@Getter
 	private final List<LayoutableRenderableEntity> children = new ArrayList<>();
 
 	@Setter
-	private Orientation orientation = Orientation.VERTICAL;
+	private ComponentOrientation orientation = ComponentOrientation.VERTICAL;
 
 	@Setter
-	private int wrapping = -1;
+	private boolean wrap = false;
 
 	@Setter
 	private Rectangle border = new Rectangle(
@@ -117,11 +111,23 @@ public class PanelComponent implements LayoutableRenderableEntity
 		int totalWidth = 0;
 
 		// Render all children
-		for (int i = 0; i < children.size(); i ++)
+		for (final LayoutableRenderableEntity child : children)
 		{
-			final LayoutableRenderableEntity child = children.get(i);
+			// Correctly propagate child dimensions based on orientation and wrapping
+			if (!wrap)
+			{
+				switch (orientation)
+				{
+					case VERTICAL:
+						child.setPreferredSize(new Dimension(childPreferredSize.width, 0));
+						break;
+					case HORIZONTAL:
+						child.setPreferredSize(new Dimension(0, childPreferredSize.height));
+						break;
+				}
+			}
+
 			child.setPreferredLocation(new Point(x, y));
-			child.setPreferredSize(childPreferredSize);
 			final Dimension childDimension = child.render(graphics);
 
 			switch (orientation)
@@ -142,35 +148,51 @@ public class PanelComponent implements LayoutableRenderableEntity
 			totalWidth = Math.max(totalWidth, width);
 			totalHeight = Math.max(totalHeight, height);
 
-			if (wrapping > 0 && i < children.size() - 1 && (i + 1)  % wrapping == 0)
+			if (!wrap)
 			{
-				switch (orientation)
+				continue;
+			}
+
+			switch (orientation)
+			{
+				case VERTICAL:
 				{
-					case VERTICAL:
+					if (childPreferredSize.height > 0 && height >= childPreferredSize.height)
 					{
 						height = 0;
 						y = baseY;
 						int diff = childDimension.width + gap.x;
 						x += diff;
 						width += diff;
-						break;
 					}
-					case HORIZONTAL:
+
+					break;
+				}
+				case HORIZONTAL:
+				{
+					if (childPreferredSize.width > 0 && width >= childPreferredSize.width)
 					{
 						width = 0;
 						x = baseX;
 						int diff = childDimension.height + gap.y;
 						y += diff;
 						height += diff;
-						break;
 					}
+
+					break;
 				}
 			}
 		}
 
 		// Remove last child gap
-		totalWidth -= gap.x;
-		totalHeight -= gap.y;
+		if (orientation == ComponentOrientation.HORIZONTAL)
+		{
+			totalWidth -= gap.x;
+		}
+		else // VERTICAL
+		{
+			totalHeight -= gap.y;
+		}
 
 		// Cache children bounds
 		childDimensions.setSize(totalWidth, totalHeight);

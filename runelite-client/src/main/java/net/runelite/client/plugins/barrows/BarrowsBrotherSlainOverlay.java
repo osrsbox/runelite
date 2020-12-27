@@ -33,18 +33,16 @@ import static net.runelite.api.MenuAction.RUNELITE_OVERLAY_CONFIG;
 import net.runelite.api.Varbits;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
-import net.runelite.client.ui.overlay.Overlay;
 import static net.runelite.client.ui.overlay.OverlayManager.OPTION_CONFIGURE;
 import net.runelite.client.ui.overlay.OverlayMenuEntry;
+import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.OverlayPriority;
 import net.runelite.client.ui.overlay.components.LineComponent;
-import net.runelite.client.ui.overlay.components.PanelComponent;
 
-public class BarrowsBrotherSlainOverlay extends Overlay
+public class BarrowsBrotherSlainOverlay extends OverlayPanel
 {
 	private final Client client;
-	private final PanelComponent panelComponent = new PanelComponent();
 
 	@Inject
 	private BarrowsBrotherSlainOverlay(BarrowsPlugin plugin, Client client)
@@ -74,8 +72,6 @@ public class BarrowsBrotherSlainOverlay extends Overlay
 			potential.setHidden(true);
 		}
 
-		panelComponent.getChildren().clear();
-
 		for (BarrowsBrothers brother : BarrowsBrothers.values())
 		{
 			final boolean brotherSlain = client.getVar(brother.getKilledVarbit()) > 0;
@@ -87,13 +83,42 @@ public class BarrowsBrotherSlainOverlay extends Overlay
 				.build());
 		}
 
-		float rewardPercent = client.getVar(Varbits.BARROWS_REWARD_POTENTIAL) / 10.0f;
+		final int rewardPotential = rewardPotential();
+		float rewardPercent = rewardPotential / 10.12f;
 		panelComponent.getChildren().add(LineComponent.builder()
-				.left("Potential")
-				.right(rewardPercent != 0 ? rewardPercent + "%" : "0%")
-				.rightColor(rewardPercent >= 73.0f && rewardPercent <= 88.0f ? Color.GREEN : rewardPercent < 65.6f ? Color.WHITE : Color.YELLOW)
-				.build());
+			.left("Potential")
+			.right(rewardPercent != 0 ? rewardPercent + "%" : "0%")
+			.rightColor(rewardPotential >= 756 && rewardPotential < 881 ? Color.GREEN : rewardPotential < 631 ? Color.WHITE : Color.YELLOW)
+			.build());
 
-		return panelComponent.render(graphics);
+		return super.render(graphics);
+	}
+
+	/**
+	 * Compute the barrows reward potential. Potential rewards are based off of the amount of
+	 * potential.
+	 * <p>
+	 * The reward potential thresholds are as follows:
+	 * Mind rune - 381
+	 * Chaos rune - 506
+	 * Death rune - 631
+	 * Blood rune - 756
+	 * Bolt rack - 881
+	 * Half key - 1006
+	 * Dragon med - 1012
+	 *
+	 * @return potential, 0-1012 inclusive
+	 * @see <a href="https://twitter.com/jagexkieren/status/705428283509366785?lang=en">source</a>
+	 */
+	private int rewardPotential()
+	{
+		// this is from [proc,barrows_overlay_reward]
+		int brothers = client.getVar(Varbits.BARROWS_KILLED_AHRIM)
+			+ client.getVar(Varbits.BARROWS_KILLED_DHAROK)
+			+ client.getVar(Varbits.BARROWS_KILLED_GUTHAN)
+			+ client.getVar(Varbits.BARROWS_KILLED_KARIL)
+			+ client.getVar(Varbits.BARROWS_KILLED_TORAG)
+			+ client.getVar(Varbits.BARROWS_KILLED_VERAC);
+		return client.getVar(Varbits.BARROWS_REWARD_POTENTIAL) + brothers * 2;
 	}
 }

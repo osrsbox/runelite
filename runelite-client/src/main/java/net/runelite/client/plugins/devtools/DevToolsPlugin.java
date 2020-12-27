@@ -27,9 +27,11 @@ package net.runelite.client.plugins.devtools;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.google.common.collect.ImmutableList;
+import com.google.common.primitives.Ints;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import static java.lang.Math.min;
+import java.util.Arrays;
 import java.util.List;
 import javax.inject.Inject;
 import lombok.Getter;
@@ -41,12 +43,16 @@ import net.runelite.api.MenuEntry;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.VarbitComposition;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.CommandExecuted;
-import net.runelite.api.events.ExperienceChanged;
 import net.runelite.api.events.MenuEntryAdded;
+import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.kit.KitType;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
@@ -99,7 +105,16 @@ public class DevToolsPlugin extends Plugin
 	private WorldMapRegionOverlay mapRegionOverlay;
 
 	@Inject
+	private SoundEffectOverlay soundEffectOverlay;
+
+	@Inject
 	private EventBus eventBus;
+
+	@Inject
+	private ConfigManager configManager;
+
+	@Inject
+	private ChatMessageManager chatMessageManager;
 
 	private DevToolsButton players;
 	private DevToolsButton npcs;
@@ -115,15 +130,19 @@ public class DevToolsPlugin extends Plugin
 	private DevToolsButton chunkBorders;
 	private DevToolsButton mapSquares;
 	private DevToolsButton validMovement;
+	private DevToolsButton movementFlags;
 	private DevToolsButton lineOfSight;
 	private DevToolsButton cameraPosition;
-	private DevToolsButton worldMapLocation ;
+	private DevToolsButton worldMapLocation;
 	private DevToolsButton tileLocation;
 	private DevToolsButton interacting;
 	private DevToolsButton examine;
 	private DevToolsButton detachedCamera;
 	private DevToolsButton widgetInspector;
 	private DevToolsButton varInspector;
+	private DevToolsButton soundEffects;
+	private DevToolsButton scriptInspector;
+	private DevToolsButton inventoryInspector;
 	private NavigationButton navButton;
 
 	@Provides
@@ -158,12 +177,16 @@ public class DevToolsPlugin extends Plugin
 
 		lineOfSight = new DevToolsButton("Line Of Sight");
 		validMovement = new DevToolsButton("Valid Movement");
+		movementFlags = new DevToolsButton("Movement Flags");
 		interacting = new DevToolsButton("Interacting");
 		examine = new DevToolsButton("Examine");
 
 		detachedCamera = new DevToolsButton("Detached Camera");
 		widgetInspector = new DevToolsButton("Widget Inspector");
 		varInspector = new DevToolsButton("Var Inspector");
+		soundEffects = new DevToolsButton("Sound Effects");
+		scriptInspector = new DevToolsButton("Script Inspector");
+		inventoryInspector = new DevToolsButton("Inventory Inspector");
 
 		overlayManager.add(overlay);
 		overlayManager.add(locationOverlay);
@@ -171,6 +194,7 @@ public class DevToolsPlugin extends Plugin
 		overlayManager.add(cameraOverlay);
 		overlayManager.add(worldMapLocationOverlay);
 		overlayManager.add(mapRegionOverlay);
+		overlayManager.add(soundEffectOverlay);
 
 		final DevToolsPanel panel = injector.getInstance(DevToolsPanel.class);
 
@@ -184,17 +208,21 @@ public class DevToolsPlugin extends Plugin
 			.build();
 
 		clientToolbar.addNavigation(navButton);
+
+		eventBus.register(soundEffectOverlay);
 	}
 
 	@Override
 	protected void shutDown() throws Exception
 	{
+		eventBus.unregister(soundEffectOverlay);
 		overlayManager.remove(overlay);
 		overlayManager.remove(locationOverlay);
 		overlayManager.remove(sceneOverlay);
 		overlayManager.remove(cameraOverlay);
 		overlayManager.remove(worldMapLocationOverlay);
 		overlayManager.remove(mapRegionOverlay);
+		overlayManager.remove(soundEffectOverlay);
 		clientToolbar.removeNavigation(navButton);
 	}
 
@@ -222,22 +250,25 @@ public class DevToolsPlugin extends Plugin
 					message = "Logger level has been set to " + newLoggerLevel;
 				}
 
-				client.addChatMessage(ChatMessageType.SERVER, "", message, null);
+				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
 				break;
 			}
 			case "getvarp":
 			{
 				int varp = Integer.parseInt(args[0]);
-				int value = client.getVarpValue(client.getVarps(), varp);
-				client.addChatMessage(ChatMessageType.SERVER, "", "VarPlayer " + varp + ": " + value, null);
+				int[] varps = client.getVarps();
+				int value = varps[varp];
+				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "VarPlayer " + varp + ": " + value, null);
 				break;
 			}
 			case "setvarp":
 			{
 				int varp = Integer.parseInt(args[0]);
 				int value = Integer.parseInt(args[1]);
-				client.setVarpValue(client.getVarps(), varp, value);
-				client.addChatMessage(ChatMessageType.SERVER, "", "Set VarPlayer " + varp + " to " + value, null);
+				int[] varps = client.getVarps();
+				varps[varp] = value;
+				client.queueChangedVarp(varp);
+				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Set VarPlayer " + varp + " to " + value, null);
 				VarbitChanged varbitChanged = new VarbitChanged();
 				varbitChanged.setIndex(varp);
 				eventBus.post(varbitChanged); // fake event
@@ -247,7 +278,7 @@ public class DevToolsPlugin extends Plugin
 			{
 				int varbit = Integer.parseInt(args[0]);
 				int value = client.getVarbitValue(client.getVarps(), varbit);
-				client.addChatMessage(ChatMessageType.SERVER, "", "Varbit " + varbit + ": " + value, null);
+				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Varbit " + varbit + ": " + value, null);
 				break;
 			}
 			case "setvarb":
@@ -255,7 +286,9 @@ public class DevToolsPlugin extends Plugin
 				int varbit = Integer.parseInt(args[0]);
 				int value = Integer.parseInt(args[1]);
 				client.setVarbitValue(client.getVarps(), varbit, value);
-				client.addChatMessage(ChatMessageType.SERVER, "", "Set varbit " + varbit + " to " + value, null);
+				VarbitComposition varbitComposition = client.getVarbit(varbit);
+				client.queueChangedVarp(varbitComposition.getIndex());
+				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Set varbit " + varbit + " to " + value, null);
 				eventBus.post(new VarbitChanged()); // fake event
 				break;
 			}
@@ -273,9 +306,36 @@ public class DevToolsPlugin extends Plugin
 
 				client.queueChangedSkill(skill);
 
-				ExperienceChanged experienceChanged = new ExperienceChanged();
-				experienceChanged.setSkill(skill);
-				eventBus.post(experienceChanged);
+				StatChanged statChanged = new StatChanged(
+					skill,
+					totalXp,
+					level,
+					level
+				);
+				eventBus.post(statChanged);
+				break;
+			}
+			case "setstat":
+			{
+				Skill skill = Skill.valueOf(args[0].toUpperCase());
+				int level = Integer.parseInt(args[1]);
+
+				level = Ints.constrainToRange(level, 1, Experience.MAX_REAL_LEVEL);
+				int xp = Experience.getXpForLevel(level);
+
+				client.getBoostedSkillLevels()[skill.ordinal()] = level;
+				client.getRealSkillLevels()[skill.ordinal()] = level;
+				client.getSkillExperiences()[skill.ordinal()] = xp;
+
+				client.queueChangedSkill(skill);
+
+				StatChanged statChanged = new StatChanged(
+					skill,
+					xp,
+					level,
+					level
+				);
+				eventBus.post(statChanged);
 				break;
 			}
 			case "anim":
@@ -309,6 +369,61 @@ public class DevToolsPlugin extends Plugin
 				Player player = client.getLocalPlayer();
 				player.getPlayerComposition().getEquipmentIds()[KitType.CAPE.getIndex()] = id + 512;
 				player.getPlayerComposition().setHash();
+				break;
+			}
+			case "sound":
+			{
+				int id = Integer.parseInt(args[0]);
+				client.playSoundEffect(id);
+				break;
+			}
+			case "msg":
+			{
+				client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", String.join(" ", args), "");
+				break;
+			}
+			case "setconf":
+			{
+				// setconf group.key name = value
+				String group = args[0];
+				String key = args[1], value = "";
+				for (int i = 2; i < args.length; ++i)
+				{
+					if (args[i].equals("="))
+					{
+						value = String.join(" ", Arrays.copyOfRange(args, i + 1, args.length));
+						break;
+					}
+
+					key += " " + args[i];
+				}
+				String current = configManager.getConfiguration(group, key);
+				final String message;
+				if (value.isEmpty())
+				{
+					configManager.unsetConfiguration(group, key);
+					message = String.format("Unset configuration %s.%s (was: %s)", group, key, current);
+				}
+				else
+				{
+					configManager.setConfiguration(group, key, value);
+					message = String.format("Set configuration %s.%s to %s (was: %s)", group, key, value, current);
+				}
+				chatMessageManager.queue(QueuedMessage.builder()
+					.type(ChatMessageType.GAMEMESSAGE)
+					.runeLiteFormattedMessage(new ChatMessageBuilder().append(message).build())
+					.build());
+				break;
+			}
+			case "getconf":
+			{
+				String group = args[0], key = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+				String value = configManager.getConfiguration(group, key);
+				final String message = String.format("%s.%s = %s", group, key, value);
+				chatMessageManager.queue(QueuedMessage.builder()
+					.type(ChatMessageType.GAMEMESSAGE)
+					.runeLiteFormattedMessage(new ChatMessageBuilder().append(message).build())
+					.build());
 				break;
 			}
 		}
